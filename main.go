@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 )
 
 // Problem struct w/ question && answer
@@ -16,6 +18,7 @@ type Problem struct {
 func main() {
 	//flag package
 	fileName := flag.String("csv", "problems.csv", "CSV file formatted as 'question,answer'")
+	timeLimit := flag.Int("limit", 30, "Time limit for the quiz")
 	flag.Parse()
 
 	//fileName is pointer to string, use * to get value from string
@@ -33,16 +36,30 @@ func main() {
 	}
 	//get slice of problems
 	problems := parseRows(rows)
+	//timer
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
 	//counter for num of correct answers
 	correct := 0
 
 	for i, problem := range problems {
-		fmt.Printf("Problem #%d: %s = \n", i+1, problem.q) //i+1 to start at 1
-
-		var answer string
-		fmt.Scanf("%s\n", &answer)
-		if answer == problem.a {
-			correct++
+		//print problem
+		fmt.Printf("Problem #%d: %s = ", i+1, problem.q) //i+1 to start at 1
+		answerChannel := make(chan string)
+		//go routine
+		go func() {
+			var answer string
+			fmt.Scanf("%s\n", &answer)
+			//send answer to answer channel
+			answerChannel <- answer
+		}()
+		select {
+		case <-timer.C: //if we get answer from timer channel
+			fmt.Printf("\nYou got %d/%d correct!\n", correct, len(problems))
+			return
+		case answer := <-answerChannel: //if we get answer from answer channel
+			if answer == problem.a { //check if answer is correct
+				correct++
+			}
 		}
 	}
 	fmt.Printf("You got %d/%d correct!\n", correct, len(problems))
@@ -54,7 +71,7 @@ func parseRows(rows [][]string) []Problem {
 	for i, row := range rows {
 		ret[i] = Problem{
 			q: row[0],
-			a: row[1],
+			a: strings.TrimSpace(row[1]),
 		}
 	}
 	return ret
